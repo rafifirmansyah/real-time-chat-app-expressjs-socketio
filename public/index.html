@@ -370,9 +370,9 @@
             const chatContent = $("#chat-content");
 
             if (isToday(time)) {
-                chatContent.html(`<div class="media media-meta-day">Hari ini</div>`);
+                chatContent.html(`<div class="media media-meta-day">Today</div>`);
             } else if (isYesterday(time)) {
-                chatContent.html(`<div class="media media-meta-day">Kemarin</div>`);
+                chatContent.html(`<div class="media media-meta-day">Yesterday</div>`);
             } else {
                 chatContent.html(`<div class="media media-meta-day">${displayDate(time)}</div>`);
             }
