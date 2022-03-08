@@ -19,5 +19,9 @@ Real Time Chat App Express JS with Socket.io, chatting with guest user.
 5. Start app :
     ```bash
     npm run start
-6. Go to the browser and run your app URL on address bar.
+    ```
+6. Go to the browser and run your App URL on address bar :
+    ```bash
+    http://localhost:3000/
+    ```
 7. Done.
