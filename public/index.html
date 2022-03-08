@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Chat App</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="page-setup" id="page-setup" style="margin-top:20%;">
+            <form id="form-setup">
+                <div class="row container d-flex justify-content-center">
+                    <div class="col-md-6">
+                        <div class="row mx-2 mb-2">
+                            <div class="col-12 text-center"> 
+                                <h4>Register for Chatting</h4>
+                            </div>
+                        </div>
+                        <div class="row mx-2 mb-3">
+                            <div class="col-1 text-right">
+                                <img src="" alt="Emoticon" id="emoticon" style="width: 33px; height: 33px;cursor: pointer;" data-status-click="false">
+                            </div>
+                            <div class="col-11">
+                                <input type="text" id="name-setup" class="form-control" placeholder="Enter your name..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="row mx-2 mb-2 d-none" id="emoticons-row">
+                            <div id="emoticons" class="bg-white p-2 rounded"></div>
+                        </div>
+                        <div class="row mx-2">
+                            <div class="col-12 text-center"> 
+                                <button class="btn btn-primary" type="submit" id="send-setup">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="page-content d-none" id="page-online">
+            <div class="padding">
+                <div class="row container d-flex justify-content-center">
+                    <div class="col-md-6">
+                        <div class="card card-bordered border">
+                            <div class="ps-container ps-theme-default ps-active-y" id="online-content" style="overflow-y: scroll !important; height:500px !important;">
+                                <div class="card-header">
+
+                                    <h5 class="mt-2">List of users who are online</h5>
+                                </div>
+                                <div class="card-body" id="list-online-users">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="page-content d-none" id="page-content">
+            <div class="padding">
+                <div class="row container d-flex justify-content-center">
+                    <div class="col-md-6">
+                        <div class="card card-bordered">
+                            <div class="card-header">
+                                <h4 class="card-title"><strong id="user-name"></strong></h4>
+                            </div>
+                            <div class="ps-container ps-theme-default ps-active-y" id="chat-content" style="overflow-y: scroll !important; height:400px !important;">
+                            </div>
+                            <form id="send-message">
+                                <div class="publisher bt-1 border-light">
+                                    <img class="avatar avatar-xs" src="https://img.icons8.com/color/36/000000/administrator-male.png" id="my-avatar" alt="">
+                                    <input class="publisher-input" type="text" placeholder="Write something..." autocomplete="off">
+                                    <button class="publisher-btn text-info" type="submit"><i class="fa fa-paper-plane"></i></button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.4.4/dist/sweetalert2.all.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Create instance of Socket IO Client
+        const chatSocket = io();
+        
+        // Listener if connect to Socket.io
+        chatSocket.on('connect', function() {
+            // Update Socket ID
+            if(sessionStorage.getItem('uuid') && (sessionStorage.getItem('socketId') != chatSocket.id)) {
+                sessionStorage.removeItem('socketId');
+                sessionStorage.setItem('socketId', chatSocket.id);
+
+                chatSocket.emit('update-socket-id', {
+                    socketId: sessionStorage.getItem('socketId'),
+                    uuid: sessionStorage.getItem('uuid'),
+                    profile: sessionStorage.getItem('profile'),
+                    name: sessionStorage.getItem('name')
+                });
+            }   
+        });
+
+        function checkSetup() {
+            if (sessionStorage.getItem('uuid')) {
+                if ($("#page-online").hasClass("d-none")) {
+                    $("#page-online").removeClass("d-none");
+                }
+                if(!$("#page-setup").hasClass("d-none")) {
+                    $("#page-setup").addClass("d-none");
+                }
+            } else {
+                if (!$("#page-online").hasClass("d-none")) {
+                    $("#page-online").addClass("d-none");
+                }
+                if($("#page-setup").hasClass("d-none")) {
+                    $("#page-setup").removeClass("d-none");
+                }
+            }
+        }
+
+        // Check has been setup ?
+        checkSetup();
+
+        function createUUID() {
+            let dt = new Date().getTime();
+            const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = (dt + Math.random()*16)%16 | 0;
+                dt = Math.floor(dt/16);
+                return (c=='x' ? r :(r&0x3|0x8)).toString(16);
+            });
+
+            return uuid;
+        }
+
+
+        // Handle Emoticons
+        const defaultEmoticon = 'https://emojiapi.dev/api/v1/smiling_face.svg';
+        const domEmot = $("#emoticon");
+        const domEmoticonsRow = $("#emoticons-row");
+
+        domEmot.attr('src', defaultEmoticon);
+        
+        domEmot.on('click', function(e) {
+            if (domEmoticonsRow.hasClass("d-none")) {
+                domEmoticonsRow.removeClass("d-none");
+                domEmot.data('status-click', true);
+            } else {
+                domEmoticonsRow.addClass("d-none");
+            }
+        });
+
+        const emoticons = ['smiling_face', 'grinning_face', 'grinning_face_with_big_eyes', 'grinning_face_with_smiling_eyes', 'beaming_face_with_smiling_eyes', 'grinning_squinting_face', 'grinning_face_with_sweat', 'rolling_on_the_floor_laughing', 'face_with_tears_of_joy', 'slightly_smiling_face', 'upsidedown_face', 'winking_face', 'smiling_face_with_halo', 'smiling_face_with_hearts', 'smiling_face_with_hearteyes', 'starstruck', 'face_blowing_a_kiss', 'kissing_face', 'kissing_face_with_closed_eyes'];
+
+        // Get Emoticons from API
+        function getEmoticons() {
+            let emoticonImages = '';
+            emoticons.forEach(function(emoticon, key) {
+                emoticonImages += `<img src="https://emojiapi.dev/api/v1/${emoticon}.svg" alt="${emoticon}" style="width: 33px; height: 33px; cursor:pointer;" class="ml-1" onclick="pickEmoticon(${key})">`;
+            });
+
+            $("#emoticons").html(emoticonImages);
+        }
+
+        // Pick Emoticon
+        function pickEmoticon(index) {
+            const pickEmoticon = `https://emojiapi.dev/api/v1/${emoticons[index]}.svg`;
+
+            domEmot.attr('src', pickEmoticon);
+        }
+
+        getEmoticons();
+
+        // Send Setup Data to server
+        $("#form-setup").on('submit', function(e) {
+            e.preventDefault();
+            
+            // Validation name
+            if (!$("#name-setup").val()) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: 'Nama wajib diisi!',
+                });
+            } else {
+                // Generate UUID for unique identifier user
+                const uuid = createUUID();
+    
+                // Save Socket ID, UUID, profile, and name to session storage
+                sessionStorage.setItem('socketId', chatSocket.id);
+                sessionStorage.setItem('uuid', uuid);
+                sessionStorage.setItem('profile', $("#emoticon").attr('src'));
+                sessionStorage.setItem('name', $("#name-setup").val());
+
+                const setupData = {
+                    socketId: sessionStorage.getItem('socketId'),
+                    uuid: sessionStorage.getItem('uuid'),
+                    profile: sessionStorage.getItem('profile'),
+                    name: sessionStorage.getItem('name')
+                };
+
+                // Emit listener 'setup' wih setup data to server
+                chatSocket.emit('setup', setupData);
+    
+                // Go to chat room
+                checkSetup();
+            }
+        });
+
+        const listOnlineUsers = [];
+
+        // Listen emit 'get-list-online-users' to get list online users and showing online users
+        chatSocket.on('get-list-online-users', newUserComes => {
+            const socketId = sessionStorage.getItem('socketId');
+            const domListOnlineUsers = $("#list-online-users");
+            const newUsers = [];
+
+            if (listOnlineUsers.length) {
+                domListOnlineUsers.html('');
+                for (let indexListOnlineUsers = 0; indexListOnlineUsers < listOnlineUsers.length; indexListOnlineUsers++) {
+                    let notTheSameAcrossAllOnlineUsers = 0;
+
+                    for (let indexUserComes = 0; indexUserComes < newUserComes.length; indexUserComes++) {
+                        if (listOnlineUsers[indexListOnlineUsers].uuid != newUserComes[indexUserComes].uuid && !checkNewUser(listOnlineUsers, newUserComes[indexUserComes].uuid) && !checkNewUser(newUsers, newUserComes[indexUserComes].uuid)) {
+                            newUsers.push(newUserComes[indexUserComes]);
+                        } else if(listOnlineUsers[indexListOnlineUsers].uuid != newUserComes[indexUserComes].uuid) {
+                            notTheSameAcrossAllOnlineUsers++;
+                        } else if((socketId == newUserComes[indexUserComes].socketId) && listOnlineUsers[indexListOnlineUsers].socketId != socketId){
+                            listOnlineUsers[indexListOnlineUsers].socketId = newUserComes[indexUserComes].socketId;
+                            console.log('update socket id');
+                        }
+                    }
+                    
+                    if (notTheSameAcrossAllOnlineUsers == newUserComes.length) {
+                        listOnlineUsers.splice(indexListOnlineUsers, 1);
+                    }
+                }
+                
+                for (let indexNewUsers = 0; indexNewUsers < newUsers.length; indexNewUsers++) {
+                    listOnlineUsers.push(newUsers[indexNewUsers]);
+                }
+            } else {
+                for (let indexUserComes = 0; indexUserComes < newUserComes.length; indexUserComes++) {
+                    listOnlineUsers.push(newUserComes[indexUserComes]);
+                }
+            }
+
+            for (let indexListOnlineUsers = 0; indexListOnlineUsers < listOnlineUsers.length; indexListOnlineUsers++) {
+                if (listOnlineUsers[indexListOnlineUsers].uuid == sessionStorage.getItem('uuid')) {
+                    domListOnlineUsers.append(`<div class="media media-chat list-online-user-self border"><img class="avatar" src="${listOnlineUsers[indexListOnlineUsers].profile}" alt="${listOnlineUsers[indexListOnlineUsers].name}"> <p class="mt-2">${listOnlineUsers[indexListOnlineUsers].name}</p> <span class="badge badge-primary"> Me</span></div>`);
+                } else {
+                    domListOnlineUsers.append(`<div class="media media-chat list-online-user border" onclick="joinChat('${listOnlineUsers[indexListOnlineUsers].socketId}', '${listOnlineUsers[indexListOnlineUsers].name}')"><img class="avatar" src="${listOnlineUsers[indexListOnlineUsers].profile}" alt="${listOnlineUsers[indexListOnlineUsers].name}"> <p class="mt-2">${listOnlineUsers[indexListOnlineUsers].name}</p></div>`);
+                }
+            }
+
+            console.log(listOnlineUsers);
+        });
+
+        // Send Message
+        $("#send-message").on('submit', function(e) {
+            e.preventDefault();
+
+            const domMessage = $(this).find(".publisher-input");
+
+            if (domMessage.val()) {
+                const messageData = {
+                    sourceSocketId: sessionStorage.getItem('socketId'),
+                    destinationSocketId: sessionStorage.getItem('opponentSocketId'),
+                    message: domMessage.val(),
+                    time: Date.now()
+                };
+
+                // Emit listener 'setup' wih setup data to server
+                chatSocket.emit('chat-message', messageData);
+
+                // Display to chat
+                const chatContent = $("#chat-content");
+
+                // If timeline chat is empty, show date label first
+                if(!chatContent.children().length) {
+                    displayDateLabel(messageData.time);
+                }
+                
+                // If lastest chat history is this user, then append in this section. Otherwise create new section 
+                if(chatContent.children().last().hasClass('media-chat') && chatContent.children().last().hasClass('media-chat-reverse')) {
+                    const dateTimedLastMessage = chatContent.children().last().children().first().find(".meta").last().children().first().attr('datetime');
+
+                    if (isSameTime(Number(dateTimedLastMessage), messageData.time)) {
+                        chatContent.children().last().children().first().find(".meta").last().before(`<p>${messageData.message}</p>`);
+                    } else {
+                        chatContent.children().last().children().first().append(`<p>${messageData.message}</p><p class="meta text-secondary"><time datetime="${messageData.time}">${getTime(messageData.time)}</time></p>`);
+                    }
+                } else {
+                    chatContent.append(`<div class="media media-chat media-chat-reverse"><div class="media-body"><p>${messageData.message}</p><p class="meta text-secondary"><time datetime="${messageData.time}">${getTime(messageData.time)}</time></p></div></div>`);
+                }
+
+                // Remove message from text field
+                domMessage.val('');
+
+                // Auto scroll top, if height is stuck
+                chatContent.animate({
+                    scrollTop: chatContent.prop("scrollHeight") - chatContent.prop("clientHeight")
+                }, 500);
+            }
+        });
+
+        // Received message
+        chatSocket.on('chat-message', res => {
+            // Display to chat
+            const chatContent = $("#chat-content");
+
+            // If timeline chat is empty, show date label first
+            if(!chatContent.children().length) {
+                displayDateLabel(res.time);
+            }
+
+            // If lastest chat history is this user, then append in this section. Otherwise create new section 
+            if(chatContent.children().last().hasClass('media-chat') && !chatContent.children().last().hasClass('media-chat-reverse')) {
+                const dateTimedLastMessage = chatContent.children().last().children().last().find(".meta").last().children().last().attr('datetime');
+
+                if (isSameTime(Number(dateTimedLastMessage), res.time)) {
+                    chatContent.children().last().children().last().find(".meta").last().before(`<p>${res.message}</p>`);
+                } else {
+                    chatContent.children().last().children().last().append(`<p>${res.message}</p><p class="meta text-secondary"><time datetime="${res.time}">${getTime(res.time)}</time></p>`);
+                }
+            } else {
+                chatContent.append(`<div class="media media-chat"><img class="avatar" src="${sessionStorage.getItem('opponentProfile')}" alt="${sessionStorage.getItem('opponentName')}"><div class="media-body"><p>${res.message}</p><p class="meta text-secondary"><time datetime="${res.time}">${getTime(res.time)}</time></p></div></div>`);
+            }
+
+            // Auto scroll top, if height is stuck
+            chatContent.animate({
+                scrollTop: chatContent.prop("scrollHeight") - chatContent.prop("clientHeight")
+            }, 500);
+        });
+
+        function isToday(time) {
+            const timeNow = new Date();
+            const timeMessage = new Date(time);
+
+            return timeNow.getDate() == timeMessage.getDate() && timeNow.getMonth() == timeMessage.getMonth() && timeNow.getFullYear() == timeMessage.getFullYear();
+        }
+
+        function isYesterday(time) {
+            const yesterday = new Date();
+            const timeMessage = new Date(time);
+
+            // Day now - 1 day
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            return yesterday.getDate() == timeMessage.getDate() && yesterday.getMonth() == timeMessage.getMonth() && yesterday.getFullYear() == timeMessage.getFullYear();
+        }
+
+        function getMonth(index) {
+            const month = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+            return month[index];
+        }
+
+        function displayDate(time) {
+            const timeMessage = new Date(time);
+
+            return `${timeMessage.getDate()} ${getMonth(timeMessage.getMonth())} ${timeMessage.getFullYear()}`;
+        }
+
+        function displayDateLabel(time) {
+            const chatContent = $("#chat-content");
+
+            if (isToday(time)) {
+                chatContent.html(`<div class="media media-meta-day">Hari ini</div>`);
+            } else if (isYesterday(time)) {
+                chatContent.html(`<div class="media media-meta-day">Kemarin</div>`);
+            } else {
+                chatContent.html(`<div class="media media-meta-day">${displayDate(time)}</div>`);
+            }
+        }
+
+        function checkNewUser(data, uuid) {
+
+            let exists = false;
+
+            for (let index = 0; index < data.length; index++) {
+                if (data[index].uuid == uuid) {
+                    exists = true;
+                    break;
+                }                
+            }
+
+            return exists;
+        }
+
+        function joinChat(socketId, destinationName) {
+            const sourceName = sessionStorage.getItem('name');
+
+            Swal.fire(
+                {
+                    title: 'Confirm',
+                    text: `Would you like to start a chat with ${destinationName} ?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }
+            )
+            .then((result) => {
+                if (result.isConfirmed) {
+                    chatSocket.emit("join-chat", {
+                        type: 'invite',
+                        sourceSocketId: sessionStorage.getItem('socketId'),
+                        destinationSocketId: socketId,
+                        message: `${sourceName} want to invite you to start a chat? Do you agree ?`
+                    });
+                }
+            });
+        }
+
+        // Reverse
+        chatSocket.on('join-chat', function(res) {
+            if (res.type == 'invite') {
+                Swal.fire(
+                    {
+                        title: 'Confirm',
+                        text: `${res.message}`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No'
+                    }
+                )
+                .then((result) => {
+                    if (result.isConfirmed) {
+                        if (result.isConfirmed) {
+                            // Reverse sourceSocketId to destinationSocketId
+                            chatSocket.emit("join-chat", {
+                                type: 'accept',
+                                sourceSocketId: sessionStorage.getItem('socketId'),
+                                destinationSocketId: res.sourceSocketId,
+                                message: `Your invitation was accepted by ${sessionStorage.getItem('name')}.`
+                            });
+
+                            sessionStorage.setItem('opponentSocketId', res.sourceSocketId);
+                            sessionStorage.setItem('opponentName', res.nameOpponentUser);
+                            sessionStorage.setItem('opponentProfile', res.profileOpponentUser);
+
+                            // Set Name Opponent User
+                            $("#user-name").html(sessionStorage.getItem('opponentName'));
+
+                            // Change Profile
+                            $("#my-avatar").attr('src', sessionStorage.getItem('profile'));
+                            $("#my-avatar").attr('alt', sessionStorage.getItem('name'));
+
+
+                            // Go to page chatting 
+                            if(!$("#page-online").hasClass("d-none")) {
+                                $("#page-online").addClass("d-none");
+                            }
+                            if($("#page-content").hasClass("d-none")) {
+                                $("#page-content").removeClass("d-none");
+                            }
+
+                            
+                        }
+                    }
+                });
+            } else if(res.type == 'accept') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: `${res.message}`,
+                    showConfirmButton: false,
+                    timer: 2500
+                });
+
+                sessionStorage.setItem('opponentSocketId', res.sourceSocketId);
+                sessionStorage.setItem('opponentName', res.nameOpponentUser);
+                sessionStorage.setItem('opponentProfile', res.profileOpponentUser);
+
+                // Set Name Opponent User
+                $("#user-name").html(sessionStorage.getItem('opponentName'));
+
+                // Change Profile
+                $("#my-avatar").attr('src', sessionStorage.getItem('profile'));
+                $("#my-avatar").attr('alt', sessionStorage.getItem('name'));
+
+                // Go to page chatting 
+                if(!$("#page-online").hasClass("d-none")) {
+                    $("#page-online").addClass("d-none");
+                }
+                if($("#page-content").hasClass("d-none")) {
+                    $("#page-content").removeClass("d-none");
+                }
+            }
+        });
+
+        function getTime(unixTimeStamp) {
+            const date = new Date(unixTimeStamp);
+
+            return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        function isSameTime(unixTimeStampdLastMessage, unixTimeStampNewMessage) {
+            const dateTimedLastMessage = new Date(unixTimeStampdLastMessage);
+            const dateTimedNewMessage = new Date(unixTimeStampNewMessage);
+            
+            if ((dateTimedLastMessage.getFullYear().toString().padStart(2, '0') == dateTimedNewMessage.getFullYear().toString().padStart(2, '0')) && ((dateTimedLastMessage.getMonth()+1).toString().padStart(2, '0') == (dateTimedNewMessage.getMonth()+1).toString().padStart(2, '0')) && (dateTimedLastMessage.getDate().toString().padStart(2, '0') == dateTimedNewMessage.getDate().toString().padStart(2, '0')) && (dateTimedLastMessage.getHours().toString().padStart(2, '0') && dateTimedNewMessage.getHours().toString().padStart(2, '0')) && (dateTimedLastMessage.getMinutes().toString().padStart(2, '0') == dateTimedNewMessage.getMinutes().toString().padStart(2, '0'))) {
+                return true;
+            }
+
+            return false;
+        }
+    </script>
+</body>
+</html>
